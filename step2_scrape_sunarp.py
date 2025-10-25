@@ -120,27 +120,32 @@ def scrape_plate(driver, plate_number, output_folder='output_images'):
     try:
         # Navegar a la página
         driver.get(url)
+        print("✓ Página cargada")
         
         # Esperar a que cargue el formulario
-        wait = WebDriverWait(driver, 10)
+        wait = WebDriverWait(driver, 15)
+        
+        # Esperar un momento para que cargue completamente
+        time.sleep(2)
         
         # Buscar el campo de entrada de placa
-        # NOTA: Estos selectores pueden necesitar ajustes según la estructura real de la página
+        print("⚙️  Buscando campo de placa...")
         try:
             plate_input = wait.until(
-                EC.presence_of_element_located((By.ID, "placa"))
+                EC.presence_of_element_located((By.ID, "nroPlaca"))
             )
-        except:
-            # Intentar otros selectores comunes
-            try:
-                plate_input = driver.find_element(By.NAME, "placa")
-            except:
-                plate_input = driver.find_element(By.CSS_SELECTOR, "input[type='text']")
+            print(f"✓ Campo de placa encontrado")
+        except Exception as e:
+            print(f"❌ No se encontró el campo de placa con ID 'nroPlaca': {str(e)}")
+            raise
         
         # Limpiar e ingresar la placa
         plate_input.clear()
         plate_input.send_keys(plate_number)
         print(f"✓ Placa ingresada: {plate_number}")
+        
+        # Pequeña pausa antes del CAPTCHA
+        time.sleep(1)
         
         # Manejar CAPTCHA
         if USE_LLM_FOR_CAPTCHA and LLM_API_KEY:
@@ -148,49 +153,73 @@ def scrape_plate(driver, plate_number, output_folder='output_images'):
         else:
             solve_captcha_manual(driver)
         
-        # Buscar y hacer clic en el botón de búsqueda
+        # Buscar y hacer clic en el botón de búsqueda/consulta
+        print("⚙️  Buscando botón de búsqueda...")
+        
         try:
-            search_button = driver.find_element(By.ID, "btnBuscar")
-        except:
+            # Buscar el botón dentro del div con clase button-login
+            search_button = driver.find_element(By.CSS_SELECTOR, "div.button-login button")
+            print(f"✓ Botón encontrado")
+            
+            # Hacer clic en el botón
             try:
-                search_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+                search_button.click()
+                print("✓ Clic en botón de búsqueda realizado")
             except:
-                search_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Buscar')]")
+                # Si el clic normal falla, usar JavaScript
+                print("⚙️  Intentando clic con JavaScript...")
+                driver.execute_script("arguments[0].click();", search_button)
+                print("✓ Clic realizado con JavaScript")
+                
+        except Exception as e:
+            print(f"❌ No se encontró el botón de búsqueda: {str(e)}")
+            print("⚠️  Por favor, haz clic manualmente en el botón de búsqueda")
+            input("Presiona ENTER después de hacer clic en 'Buscar' o 'Consultar'...")
         
-        search_button.click()
-        print("✓ Búsqueda iniciada")
+        # Esperar a que se procese la búsqueda
+        print("⏳ Esperando resultados...")
+        time.sleep(3)
         
-        # Esperar a que carguen los resultados
-        time.sleep(5)
-        
-        # Verificar si hay resultados
+        # Esperar a que cargue el resultado (imagen dentro del div container-data-vehiculo)
         try:
-            # Esperar a que aparezcan los resultados
-            wait.until(
-                EC.presence_of_element_located((By.CLASS_NAME, "resultado"))
+            result_element = wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.container-data-vehiculo img"))
             )
-            print("✓ Resultados cargados")
-        except:
-            print("⚠️  No se encontraron resultados o timeout")
+            print(f"✓ Resultado cargado (imagen encontrada)")
+        except Exception as e:
+            print(f"⚠️  No se detectó la imagen de resultado: {str(e)}")
+            print("    Continuando de todas formas...")
         
-        # Capturar screenshot de los resultados
+        # Esperar adicional para que se cargue completamente la imagen
+        time.sleep(2)
+        
+        # Crear carpeta de salida si no existe
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
             print(f"✓ Carpeta creada: {output_folder}")
         
+        # Verificar que hay contenido visible antes de capturar
+        print("⚙️  Preparando captura de pantalla...")
+        
+        # Scroll para asegurar que todo el contenido esté visible
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)
+        
         # Guardar screenshot completo de la página
         screenshot_path = os.path.join(output_folder, f"{plate_number}.png")
         driver.save_screenshot(screenshot_path)
-        print(f"✓ Screenshot guardado: {screenshot_path}")
+        print(f"✓ Screenshot completo guardado: {screenshot_path}")
         
-        # Opcionalmente, capturar solo el elemento de resultados
+        # Capturar la imagen del resultado desde el div container-data-vehiculo
         try:
-            result_element = driver.find_element(By.CLASS_NAME, "resultado")
+            # Buscar la imagen dentro del div con clase container-data-vehiculo
+            result_img = driver.find_element(By.CSS_SELECTOR, "div.container-data-vehiculo img")
             result_screenshot_path = os.path.join(output_folder, f"{plate_number}_resultado.png")
-            result_element.screenshot(result_screenshot_path)
+            result_img.screenshot(result_screenshot_path)
             print(f"✓ Screenshot de resultado guardado: {result_screenshot_path}")
-        except:
-            print("ℹ️  No se pudo capturar screenshot específico del resultado")
+        except Exception as e:
+            print(f"⚠️  No se pudo capturar la imagen del resultado: {str(e)}")
+            print("    Se usará el screenshot completo para el OCR")
         
         return True
         

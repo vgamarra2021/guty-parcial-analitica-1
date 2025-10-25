@@ -2,5 +2,7 @@ pandas
 selenium
 webdriver-manager
 pillow
-pytesseract
+easyocr
 opencv-python
+torch
+torchvision

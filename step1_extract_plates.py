@@ -33,6 +33,9 @@ def extract_plates_data(csv_file='dataset_plates.csv', output_file='plates_data.
     # Eliminar filas donde PLACA esté vacío
     df_filtrado = df_filtrado[df_filtrado['PLACA'].notna()]
     
+    # Rellenar valores NaN con strings vacíos
+    df_filtrado = df_filtrado.fillna('')
+    
     # Convertir a lista de diccionarios
     plates_data = df_filtrado.to_dict('records')
     
